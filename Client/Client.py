@@ -6,7 +6,9 @@ from threading import Thread
 from datetime import datetime
 import csv
 import time
-from rotation import LinearTracking
+from rotation import LinearTracking1
+#import signal
+
 server_address = ('10.66.247.21',5001)
 
 def terminate(server_address,sock):
@@ -37,25 +39,46 @@ if __name__ == '__main__':
     heading = roll = pitch = []
     accX = accY = accZ = []
     samples = 0
+    acc = (0,0,0)
     # booleans controlling functionality
     DisplayGraphMode = True
     CollectDataMode = False
     Euler = False
     Quaternion = True
+    trackMovement = False
     # sample parameters
     NUMBEROFSAMPLES = 2000
     nameOfFile = 'IMUData.csv'
-    #curtime = time.time()
+    
+    samplerate = 1 # 10 Hz integration of accelerometer
+    curTime = time.time()
+    nextTick = curTime + 1/samplerate
+
     if (DisplayGraphMode):
         thread.start()
     if (CollectDataMode):
         csvfile = open(nameOfFile, "w")
     assert(Euler != Quaternion),'Euler and Quaternion boolean cannot equal'
     assert(Euler == False), 'Only use quarternions'
+    """
+    def changeMovement(signum,frame):
+        global acc
+        print('acceleration: x = %0.2f, y = %0.2f, z = %0.2f' %(acc[0],acc[1],acc[2]))
+        LinearTracking1.integrate(acc[0],acc[1],acc[2],function='Riemann')
+        rotation.accx = acc[0]
+        rotation.accy = acc[1]
+        rotation.accz = acc[2]
+        signal.signal(signal.SIGALRM,zeroDetectionHandler)
+        signal.alarm(0.1)
+
+    if (trackMovement):
+        signal.signal(signal.SIGALRM,changeMovement)
+        signal.alarm(0.1)
+    """
     while (not terminateConnection and samples < NUMBEROFSAMPLES):
-        #dt = time.time() - curtime
-        #print(dt)
-        #curtime = time.time()
+
+        curTime = time.time()
+        
         try:
             data = communicateToServer(server_address,sock)
             if (Euler):
@@ -69,10 +92,15 @@ if __name__ == '__main__':
                     rotation.rotationMatrix = rotation.rotate(orientation[0],orientation[1],orientation[2])
                 elif (Quaternion):
                     rotation.rotationMatrix = rotation.rotateQuaternion(orientation[0],orientation[1],orientation[2],orientation[3])
-                    #LinearTracking.integrate(acc[0],acc[1],acc[2])
-                    #rotation.accx = acc[0]
-                    #rotation.accy = acc[1]
-                    #rotation.accz = acc[2]
+                    dt = curTime - nextTick
+                    print(dt)
+                    if (trackMovement and curTime > nextTick):
+                        nextTick = time.time() + 1/samplerate
+                        print('acceleration: x = %0.2f, y = %0.2f, z = %0.2f' %(acc[0],acc[1],acc[2]))
+                        LinearTracking1.integrate(acc[0],acc[1],acc[2],function='Riemann')
+                        rotation.accx = acc[0]
+                        rotation.accy = acc[1]
+                        rotation.accz = acc[2]
             if (CollectDataMode):
                 samples = samples+1
                 print('Sample: %d' %samples)

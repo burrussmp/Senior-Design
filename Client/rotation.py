@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from pyquaternion import Quaternion
-import LinearTracking
+import LinearTracking1
 
 #Quaternion = [1 0 0 0];     # output quaternion describing the Earth relative to the sensor
 # identity rotation matrix
@@ -83,7 +83,6 @@ def animateGraph():
             yaxisR[i,:] = rotationMatrix.rotate((yaxis[i,0],yaxis[i,1],yaxis[i,2]))
             zaxisR[i,:] = rotationMatrix.rotate((zaxis[i,0],zaxis[i,1],zaxis[i,2]))
         
-        LinearTracking.integrate(accx,accy,accz)
         ax.clear()
         r = [-1,1]
 
@@ -94,7 +93,7 @@ def animateGraph():
         ax.plot3D(yaxisR[:,0],yaxisR[:,1],yaxisR[:,2],color='g')
         ax.plot3D(zaxisR[:,0],zaxisR[:,1],zaxisR[:,2],color='b')
 
-        pos = LinearTracking.pos.getSelf()
+        pos = LinearTracking1.pos.getSelf()
 
         ax2.scatter3D(pos[0],pos[1],pos[2])
         ax.set_xlim(-5,10)

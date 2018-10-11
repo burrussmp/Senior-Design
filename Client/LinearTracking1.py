@@ -19,7 +19,9 @@ def elementWiseTupleSum(t1,t2):
 def divideTupleByDouble(t1,d):
     assert(len(t1)==3)
     return (t1[0]/d,t1[1]/d,t1[2]/d)
-
+def multiplyTupleByDouble(t1,d):
+    assert(len(t1)==3)
+    return (t1[0]*d,t1[1]*d,t1[2]*d)
 class vectThreeD:
     def __init__(self):
         self.cur = (0,0,0)
@@ -30,21 +32,18 @@ class vectThreeD:
         assert(len(newValues)==3)
         self.cur = newValues
 
+    def magnitude(self):
+        return math.sqrt(self.cur[0]*self.cur[0] + self.cur[1]*self.cur[1] + self.cur[2]*self.cur[2])
+    
     def getprev(self):
         return (self.prev[0], self.prev[1], self.prev[2])
-    """
     def integrateRiemann(self,dt,function='left'):
         if (function == 'left'):
-            return (dt*self.xprev + self.xprev,
-            dt*self.yprev + self.yprev,
-            dt*self.zprev + self.zprev)
+            return multiplyTupleByDouble(self.prev,dt)
         if (function == 'right'):
-            return (dt*self.x + self.xprev, 
-            dt*self.y + self.yprev, 
-            dt*self.z + self.zprev)
-    """        
+            return multiplyTupleByDouble(self.cur,dt)    
     def integrateTrapezoidal(self,dt):
-        return divideTupleByDouble(elementWiseTupleSum(self.cur,self.prev),2)
+        return multiplyTupleByDouble(divideTupleByDouble(elementWiseTupleSum(self.cur,self.prev),2),dt)
 
     def display(self):
         print('x: %0.2f, y: %0.2f, z: %0.2f' %(self.cur[0],self.cur[1],self.cur[2]))
@@ -73,6 +72,7 @@ def display():
     vel.display()
     print('Location:')
     pos.display()
+    print("#############")
 
 # x,y,z acceleration vectors (m/s)
 # function: either riemann or trapezoidal sums
@@ -82,22 +82,17 @@ def integrate(x,y,z,function='Riemann'):
     time.sleep(1)
     if (function == 'Riemann'):
         acc.change((x,y,z))
-        integrateAcc = acc.integrateTrapezoidal(dt)
-        vel.change(integrateAcc)
-        integrateVel = vel.integrateTrapezoidal(dt)
-        pos.change(integrateVel)
+        if (acc.magnitude() < 1):
+            return
+        integrateAcc = acc.integrateRiemann(dt,function='left')
+        vel.change(elementWiseTupleSum(integrateAcc,vel.cur))
+        integrateVel = vel.integrateRiemann(dt,function='left')
+        pos.change(elementWiseTupleSum(integrateVel,pos.cur))
     elif (function == 'Trapezoidal'):
         acc.change((x,y,z))
+        if (acc.magnitude() < 1):
+            return
         integrateAcc = acc.integrateTrapezoidal(dt)
-        print(integrateAcc)
-        vel.change(elementWiseTupleSum(integrateAcc,vel.prev))
+        vel.change(elementWiseTupleSum(integrateAcc,vel.cur))
         integrateVel = vel.integrateTrapezoidal(dt)
-        pos.change(elementWiseTupleSum(integrateVel,pos.prev))
-
-display()
-integrate(1,1,1,function='Trapezoidal')
-display()
-integrate(1,1,1,function='Trapezoidal')
-display()
-integrate(0,0,1,function='Trapezoidal')
-display()
+        pos.change(elementWiseTupleSum(integrateVel,pos.cur))
