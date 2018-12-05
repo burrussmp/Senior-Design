@@ -1,22 +1,41 @@
 import logging
 import sys
 import time
-
+sys.path.append('/home/pi/Desktop/SeniorDesign/SeniorDesign')
 from Adafruit_BNO055 import BNO055
 import socket
 
-server_address = ('10.66.247.192',5001)
+server_address = ('10.66.50.49',5001)
 
-def readBNO055(bno):
+def calibrate(bno):
+    sys = accel = 0
+    while (sys != 3 or accel != 1 ):
+        sys, gyro, accel, mag = bno.get_calibration_status()
+        print('Sys: %d Acceleration: %d' %(sys,accel))
+    print('Calibrated')
+
+def readBNO055(bno,Quaternion):
     heading, roll, pitch = bno.read_euler()
     # Read the calibration status, 0=uncalibrated and 3=fully calibrated.
     sys, gyro, accel, mag = bno.get_calibration_status()
     # Print everything out.
+    """
     print('Heading={0:0.2F} Roll={1:0.2F} Pitch={2:0.2F}\tSys_cal={3} Gyro_cal={4} Accel_cal={5} Mag_cal={6}'.format(
           heading, roll, pitch, sys, gyro, accel, mag))
-    # Other values you can optionally read:
+    """
+    x,y,z = bno.read_linear_acceleration()
+    accx,accy,accz = bno.read_accelerometer()
+    #print(accx)
+    #print(accy)
+    #print(accz)
+    #time.sleep(0.5)
     # Orientation as a quaternion:
-    #x,y,z,w = bno.read_quaterion()
+    if (Quaternion):
+        qx,qy,qz,qw = bno.read_quaternion()
+        return (qx,qy,qz,qw,x,y,z)
+    else:
+        heading, roll, pitch = bno.read_euler()
+        return (heading,roll,pitch,x,y,z)
     # Sensor temperature in degrees Celsius:
     #temp_c = bno.read_temp()
     # Magnetometer data (in micro-Teslas):
@@ -31,9 +50,9 @@ def readBNO055(bno):
     # Gravity acceleration data (i.e. acceleration just from gravity--returned
     # in meters per second squared):
     #x,y,z = bno.read_gravity()
-    # Sleep for a second until the next reading.
-    time.sleep(0.5)
-    return (heading,roll,pitch)
+    # Sleep for a second until the next reading)
+    #return (qx,qy,qz,qw,x,y,z)
+
 def createSocket(server_address):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM,0)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -48,7 +67,12 @@ def createSocket(server_address):
 def communicateToClient(sock,message):
     data = connection.recv(16)
     data_decoded = data.decode()
-    print(data_decoded)
+    if (data_decoded == 's'):
+        sock.close()
+        print('Done.')
+        exit(0)
+    #print(data_decoded)
+    message = str(message)
     connection.sendall(message)
 
 def SystemStatus(bno):
@@ -78,6 +102,10 @@ if __name__ == '__main__':
     sock = createSocket(server_address)
     print('Waiting for client...')
     connection, client_address = sock.accept()
+    print('Reading BNO055')
+    calibrate(bno)
+    # booleans
+    Quaternion = True # if false, collect euler angles
     while(True):
-        message = readBNO055(bno)
+        message = readBNO055(bno,Quaternion)
         communicateToClient(sock,message)

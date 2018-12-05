@@ -9,7 +9,7 @@ import time
 from rotation import LinearTracking1
 #import signal
 
-server_address = ('10.66.247.21',5001)
+server_address = ('10.66.244.204',5001)
 
 def terminate(server_address,sock):
     message = "s"
@@ -50,31 +50,16 @@ if __name__ == '__main__':
     NUMBEROFSAMPLES = 2000
     nameOfFile = 'IMUData.csv'
     
-    samplerate = 1 # 10 Hz integration of accelerometer
+    samplerate = 1 # 1 Hz integration of accelerometer
     curTime = time.time()
     nextTick = curTime + 1/samplerate
-
+    data = communicateToServer(server_address,sock)
     if (DisplayGraphMode):
         thread.start()
     if (CollectDataMode):
         csvfile = open(nameOfFile, "w")
     assert(Euler != Quaternion),'Euler and Quaternion boolean cannot equal'
     assert(Euler == False), 'Only use quarternions'
-    """
-    def changeMovement(signum,frame):
-        global acc
-        print('acceleration: x = %0.2f, y = %0.2f, z = %0.2f' %(acc[0],acc[1],acc[2]))
-        LinearTracking1.integrate(acc[0],acc[1],acc[2],function='Riemann')
-        rotation.accx = acc[0]
-        rotation.accy = acc[1]
-        rotation.accz = acc[2]
-        signal.signal(signal.SIGALRM,zeroDetectionHandler)
-        signal.alarm(0.1)
-
-    if (trackMovement):
-        signal.signal(signal.SIGALRM,changeMovement)
-        signal.alarm(0.1)
-    """
     while (not terminateConnection and samples < NUMBEROFSAMPLES):
 
         curTime = time.time()
@@ -93,7 +78,6 @@ if __name__ == '__main__':
                 elif (Quaternion):
                     rotation.rotationMatrix = rotation.rotateQuaternion(orientation[0],orientation[1],orientation[2],orientation[3])
                     dt = curTime - nextTick
-                    print(dt)
                     if (trackMovement and curTime > nextTick):
                         nextTick = time.time() + 1/samplerate
                         print('acceleration: x = %0.2f, y = %0.2f, z = %0.2f' %(acc[0],acc[1],acc[2]))

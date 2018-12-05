@@ -9,7 +9,8 @@ from pyquaternion import Quaternion
 # Think about saturating the speed
 # applying a lowpass filter to address drift for noise
 
-
+MIN_ACC_MAG = 1.5
+MAX_VEL = 0
 # tuple functions
 def elementWiseTupleSum(t1,t2):
     assert (len(t1) == 3)
@@ -82,16 +83,16 @@ def integrate(x,y,z,function='Riemann'):
     time.sleep(1)
     if (function == 'Riemann'):
         acc.change((x,y,z))
-        if (acc.magnitude() < 1):
-            return
+        if (acc.magnitude() < MIN_ACC_MAG):
+            acc.change((0,0,0))
         integrateAcc = acc.integrateRiemann(dt,function='left')
         vel.change(elementWiseTupleSum(integrateAcc,vel.cur))
         integrateVel = vel.integrateRiemann(dt,function='left')
         pos.change(elementWiseTupleSum(integrateVel,pos.cur))
     elif (function == 'Trapezoidal'):
         acc.change((x,y,z))
-        if (acc.magnitude() < 1):
-            return
+        if (acc.magnitude() < MIN_ACC_MAG):
+            acc.change((0,0,0))
         integrateAcc = acc.integrateTrapezoidal(dt)
         vel.change(elementWiseTupleSum(integrateAcc,vel.cur))
         integrateVel = vel.integrateTrapezoidal(dt)

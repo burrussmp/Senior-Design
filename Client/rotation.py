@@ -17,7 +17,7 @@ import LinearTracking1
 #                 [0,  1 ,  0],
 #                 [0,  0,  1]]
 rotationMatrix = Quaternion([1,0,0,0])
-accx = accy = accz = 0
+mytick = 0
 # rotate based on header, pitch, and roll
 # arguments in degrees
 def rotate(header,pitch,roll):
@@ -62,11 +62,23 @@ def animateGraph():
     zaxis = np.array([[0,0,0.5],
                     [0,0,3.5]])
 
-    ax = fig.add_subplot(211, projection='3d')
-    ax2 = fig.add_subplot(212, projection='3d')
+    ax = fig.add_subplot(111, projection='3d')
+    """
+    ax = fig.add_subplot(511, projection='3d')
+    ax2 = fig.add_subplot(512, projection='3d')
+    ax2.set_title("3D Position Estimate")
+    ax3 = fig.add_subplot(513)
+    ax3.set_title("Acceleration X")
+    ax4 = fig.add_subplot(514)
+    ax4.set_title("Acceleration Y")
+    ax5 = fig.add_subplot(515)
+    ax3.set_title("Acceleration Z")
+    """
+    mytick = [0, 0]
     # animate()
     def animate(i):
         #try:
+        #global mytick
         Z = np.zeros((8,3))
         xaxisR = np.zeros((2,3))
         yaxisR = np.zeros((2,3))
@@ -93,9 +105,21 @@ def animateGraph():
         ax.plot3D(yaxisR[:,0],yaxisR[:,1],yaxisR[:,2],color='g')
         ax.plot3D(zaxisR[:,0],zaxisR[:,1],zaxisR[:,2],color='b')
 
+        """
         pos = LinearTracking1.pos.getSelf()
+        acc = LinearTracking1.acc.getSelf()
+        #ax2.scatter3D(pos[0],pos[1],pos[2])
+        accx.append(acc[0])
+        accy.append(acc[1])
+        accz.append(acc[2])
+        ax3.plot(mytick, accx)
+        ax4.plot(mytick, accy)
+        ax5.plot(mytick, accz)
+        mytick.append(mytick[-1]+1)
 
-        ax2.scatter3D(pos[0],pos[1],pos[2])
+        ax3.set_ylim(-2,2)
+        ax3.set_xlim(mytick[-1]-10,mytick[-1]+10)
+        """
         ax.set_xlim(-5,10)
         ax.set_ylim(-5,10)
         ax.set_zlim(-5,10)
