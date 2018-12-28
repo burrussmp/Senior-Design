@@ -15,6 +15,7 @@ import serial
 ser = serial.Serial('/dev/ttyACM0', 9600)
 import numpy as np
 import math
+import VUNDT_OLED_Screen
 
 minThreshold = -4.5
 maxThreshold = 4
@@ -94,8 +95,5 @@ if __name__ == '__main__':
         heading, roll, pitch = bno.read_euler()
         message = str(heading) + ' ' + str(kicks)
         ser.write(str(message))
-        #myMessage = ser.readline()
-        #print(heading)
         time.sleep(1.3)
-        #print(heading)
         print(kicks)
