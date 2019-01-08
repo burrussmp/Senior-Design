@@ -12,7 +12,7 @@ import csv
 import datetime
 from datetime import datetime
 import serial
-ser = serial.Serial('/dev/ttyACM0', 9600)
+#ser = serial.Serial('/dev/ttyACM0', 9600)
 import numpy as np
 import math
 import VUNDT_OLED_Screen
@@ -94,6 +94,6 @@ if __name__ == '__main__':
     while 1:
         heading, roll, pitch = bno.read_euler()
         message = str(heading) + ' ' + str(kicks)
-        ser.write(str(message))
+        #ser.write(str(message))
         time.sleep(1.3)
-        print(kicks)
+        print(message)

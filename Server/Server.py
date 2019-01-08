@@ -4,7 +4,7 @@ import time
 sys.path.append('/home/pi/Desktop/SeniorDesign/SeniorDesign')
 from Adafruit_BNO055 import BNO055
 import socket
-
+import math
 server_address = ('10.66.50.49',5001)
 
 def calibrate(bno):
@@ -94,18 +94,51 @@ def SystemStatus(bno):
     print('Gyroscope ID:       0x{0:02X}\n'.format(gyro))
     print('Reading BNO055 data, press Ctrl-C to quit...')
 
+def getAverage(mArray):
+    sum = 0.0
+    for i in range(len(mArray)):
+        sum = sum+mArray[i]
+    return sum/float(len(mArray))
 if __name__ == '__main__':
     bno = BNO055.BNO055(rst=18)
-    if not bno.begin():
+    if not bno.begin(BNO055.OPERATION_MODE_COMPASS):
         raise RuntimeError('Failed to initialize BNO055! Is the sensor connected?')
-    SystemStatus(bno)
-    sock = createSocket(server_address)
-    print('Waiting for client...')
-    connection, client_address = sock.accept()
-    print('Reading BNO055')
-    calibrate(bno)
-    # booleans
-    Quaternion = True # if false, collect euler angles
+    #SystemStatus(bno)
+    #sock = createSocket(server_address)
+    #print('Waiting for client...')
+    #connection, client_address = sock.accept()
+    #print('Reading BNO055')
+    #calibrate(bno)
+    sum = 0.0
     while(True):
-        message = readBNO055(bno,Quaternion)
-        communicateToClient(sock,message)
+        accx,accy,accz= bno.read_accelerometer()
+        accmag = math.sqrt(accx*accx+accy*accy+accz*accz)
+        print(accmag-9.8)
+        #error = 0.37869642
+        #error = 0.32
+        #print(accmag-error)
+        #afterError = accmag - error
+        #sum = sum + afterError
+        #print(sum)
+        time.sleep(0.1)
+    """
+    averageError = []
+    for i in range(10):
+        mags = []
+        count = 0.0
+        while(count < 100):
+            accx,accy,accz= bno.read_linear_acceleration()
+            accmag = math.sqrt(accx*accx+accy*accy+accz*accz)
+            mags.append(accmag)
+            time.sleep(0.1)
+            count = count+1.0
+        avg = getAverage(mags)
+        print(avg)
+        averageError.append(avg)
+    print(getAverage(averageError))
+    """
+    # booleans
+    #Quaternion = True # if false, collect euler angles
+    #while(True):
+    #    message = readBNO055(bno,Quaternion)
+    #    communicateToClient(sock,message)
