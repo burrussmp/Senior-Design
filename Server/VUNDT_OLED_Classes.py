@@ -124,7 +124,6 @@ class DiveTime:
     def __init__(self):
         self.font = ImageFont.truetype(path+"slkscr.ttf",8)
         self.text = "Time: "
-    
     def startTimer(self):
         self.start = time.time()
 
@@ -160,7 +159,14 @@ class HomeScreen:
         self.counter = (self.counter+1)%4
     def drawLogo(self):
         return self.image
-
+class SafetyFeatures:
+    def __init__(self):
+        self.font = ImageFont.truetype(path+"NirmalaB.ttf",15)
+    def AscendingorDescendingTooQuickly(self,draw):
+        (width,height) = self.font.getsize("SLOW")
+        draw.text((64-width/2, 20-height/2), "SLOW", font=self.font, fill=255)
+        (width,height) = self.font.getsize("ASCENT/DESCENT")
+        draw.text((64-width/2, 40-height/2), "ASCENT/DESCENT", font=self.font, fill=255)
 """
 # get an image
 image = Image.new('1', (128, 64))
