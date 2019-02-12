@@ -1,11 +1,11 @@
 from PIL import Image, ImageDraw, ImageFont
 import time
-#import matplotlib.pyplot as plt
-#import matplotlib.animation as anim
 import math
 
-path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/"
-
+#path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/"
+path = "C:/Users/Matthew Burruss/Documents/Github/SeniorDesign/SeniorDesignProject/Server/"
+import matplotlib.pyplot as plt
+import matplotlib.animation as anim
 class CompassUnit:
     def __init__(self,kind,text,heading):
         self.kind = kind
@@ -124,12 +124,16 @@ class DiveTime:
     def __init__(self):
         self.font = ImageFont.truetype(path+"slkscr.ttf",8)
         self.text = "Time: "
+        self.elapsedTime = 0
     def startTimer(self):
         self.start = time.time()
 
+    def getTime(self):
+        return self.elapsedTime
+
     def drawDiveTime(self,draw):
-        df = time.time()-self.start
-        timeText = self.text + str(int(df/60)) + ":" + str(int(df%60))
+        self.elapsedTime = time.time()-self.start
+        timeText = self.text + str(int(self.elapsedTime/60)) + ":" + str(int(self.elapsedTime%60))
         (width,height) = self.font.getsize(timeText)
         x = 8
         # center = 64 - width/2 # center
@@ -162,12 +166,86 @@ class HomeScreen:
 class SafetyFeatures:
     def __init__(self):
         self.font = ImageFont.truetype(path+"NirmalaB.ttf",15)
+        self.font2 = ImageFont.truetype(path+"NirmalaB.ttf",12)
+        self.font3 = ImageFont.truetype(path+"Nirmala.ttf",10)
+        self.font4 = ImageFont.truetype(path+"Nirmala.ttf",8)
+        self.font5 = ImageFont.truetype(path+"slkscr.ttf",8)          
+        self.safetyTimerStart = 0
+        self.safetyStopTime = 300 #seconds
     def AscendingorDescendingTooQuickly(self,draw):
         (width,height) = self.font.getsize("SLOW")
         draw.text((64-width/2, 20-height/2), "SLOW", font=self.font, fill=255)
         (width,height) = self.font.getsize("ASCENT/DESCENT")
         draw.text((64-width/2, 40-height/2), "ASCENT/DESCENT", font=self.font, fill=255)
-"""
+    def SafetyStop(self,draw,depth):
+        # if depth below 9 we are not in the safety stop
+        if (depth > 9):
+            return -1
+        if (self.safetyTimerStart == 0):
+            self.safetyTimerStart = time.time()
+        df = self.safetyStopTime + (self.safetyTimerStart - time.time())
+        if (df < 0 or depth <1): # we have completed the safety stop
+            return 1
+        timeText = "Time: " + str(int(df/60)) + ":" + str(int(df%60))
+        (width,height) = self.font2.getsize("SAFETY STOP")
+        draw.text((64-width/2, 0), "SAFETY STOP", font=self.font2, fill=255)
+        draw.line(((0,15),(128,15)),fill=255)
+        (width,height) = self.font3.getsize(timeText)
+        draw.text((2, 64-height -1), timeText, font=self.font3, fill=255)
+        # draw depth diagram
+        draw.line(((65,25),(100,25)),fill=255)
+        draw.line(((65,55),(100,55)),fill=255)
+        (width,height) = self.font4.getsize("4m")
+        draw.text((65-width, 25-height/2-1), "4m", font=self.font4, fill=255)
+        (width,height) = self.font4.getsize("6m")
+        draw.text((65-width, 55-height/2-1), "6m", font=self.font4, fill=255)
+        # draw arrow
+        if (depth > 6 or depth < 4):
+            if (depth > 6):
+                depthWarning = "Too low!"
+                depthNormalized = 1
+            if (depth < 4):
+                depthWarning = "Too high!"
+                depthNormalized = 0
+            (width,height) = self.font3.getsize(depthWarning)
+            draw.text((2, 32-height-1), depthWarning, font=self.font3, fill=255)
+        else:
+            depthNormalized = (depth-4.0)/(6.0-4.0)
+        y_denormalized = depthNormalized*(55-25)+25
+        depthText = str(round(depth,1))
+        (width,height) = self.font5.getsize(depthText)
+        draw.text((106, y_denormalized-height/2-1), depthText, font=self.font5, fill=255)
+        draw.line(((102,y_denormalized),(105,y_denormalized)),fill=255)
+        draw.line(((102,y_denormalized+2),(102,y_denormalized-2)),fill=255)
+        return 0
+    # Displays: Avg depth, total dive time, lowest depth, temperature
+    def PostDiveStatistics(self,depthSum,depthReadings,totalTimeElapsed,lowestDepth):
+        # Print Title
+        (width,height) = self.font2.getsize("DIVE STATS")
+        draw.text((64-width/2, 0), "DIVE STATS", font=self.font2, fill=255)
+        draw.line(((0,15),(128,15)),fill=255)
+        # Print average Depth
+        avgDepthTitle = "Avg Depth (m): "
+        avgDepthData = str(round(float(depthSum)/float(depthReadings),1))
+        draw.text((2, 20), avgDepthTitle, font=self.font5, fill=255)
+        draw.text((90, 20), avgDepthData, font=self.font5, fill=255)
+        # Print lowest Depth
+        lowDepthTitle = "Max (m):"
+        lowDepthData = str(round(lowestDepth,1))
+        draw.text((2, 30), lowDepthTitle, font=self.font5, fill=255)
+        draw.text((90, 30), lowDepthData, font=self.font5, fill=255)
+        # Print temperature
+        tempTitle = "Temp (C):"
+        tempData = "30"
+        draw.text((2, 40), tempTitle, font=self.font5, fill=255)
+        draw.text((90, 40), tempData, font=self.font5, fill=255)        
+        # Print total dive time
+        diveTimeTitle = "Dive Time:"
+        diveTimeData = str(int(totalTimeElapsed/60)) + ":" + str(int(totalTimeElapsed%60))
+        draw.text((2, 50), diveTimeTitle, font=self.font5, fill=255)
+        draw.text((90, 50), diveTimeData, font=self.font5, fill=255)
+        return
+
 # get an image
 image = Image.new('1', (128, 64))
 # get a font
@@ -187,23 +265,34 @@ kickMonitor = KickCounter()
 timeMonitor = DiveTime()
 timeMonitor.startTimer()
 homeScreen = HomeScreen()
+safetyFeatures = SafetyFeatures()
 alert = Alert()
-depth = 0
+depth = 3
 oxygen = 200
 kicks = 0
 minutes = 0
 
-for i in range(10):
+for i in range(1000):
     draw.rectangle((0,0,128,64), outline=0, fill=0)
-    if (i == 0):
-        img = plt.imshow(homeScreen.drawLogo())
-        plt.pause(8)
-    else:
-        homeScreen.drawLoadScreen(draw)
-        img.set_data(image)
-        plt.pause(0.5)
+    print(i)
+    #if (i == 0):
+     #   safetyFeatures.AscendingorDescendingTooQuickly(draw)
+        #img.set_data(image)
+     #   plt.pause(2)
+    if (i>10):
+        depth = depth+0.2
+    if (i > 30):
+        depth = depth - 0.4
+    if (i > 40):
+        depth = 5
+    #safetyFeatures.SafetyStop(draw,depth)
+    safetyFeatures.PostDiveStatistics(577,20,73,33)
+    #img.set_data(image)
+    plt.pause(0.03)
+    img = plt.imshow(image)
+    img.set_data(image)
     plt.draw()
-
+"""
 goBackward = False
 alerting = False
 count = 0

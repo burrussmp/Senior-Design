@@ -3,8 +3,11 @@
 # @description A python script to control a 128x64 OLED Screen
 
 # Developer Notes
-# We will have to move the IMU calculations to the calf of the diver
-
+# Change when the dive time starts
+# Get the selection working between dives before the dive begins
+# Get the dive to begin
+# Add temperature as a reading
+# allow the two to go back and forth
 import time
 import RPi.GPIO as GPIO
 import Adafruit_GPIO.SPI as SPI
@@ -70,8 +73,16 @@ class HUD:
         self.alertTime = 0
         self.heading = 0
         self.depth = 0
+        self.safetyStopBoolean = False # set to True when we have gone below diveHusBegunLimit
+        self.diveHasBegunLimitMeters = 8 # depth at which if you go up, safety stop will begin
+        self.safetyStopBeginDepth = 6 # meters at which upon rising, safety stop begins
+        self.initiateSafetyStop = False # When diver begins to surface, this will be set true.
         self.lastTimeScreenUpdated = time.time()
         self.calibrationAdjustment = 266
+        self.lowestDepth = 0
+        self.depthSum = 0
+        self.depthReadings = 0
+        self.showDiveStatistics = False
         #self.displayLogo()
         #for i in range(10):
         #    print("Drawing loading Screen")
@@ -130,6 +141,30 @@ class HUD:
         time.sleep(1)
 
     def updateScreen(self,heading,kicks,oxygen,depth):
+        # Have we completed a dive show the dive statistics for the current dive
+        if (self.showDiveStatistics):
+            elapsedTime = self.timeMonitor.getTime()
+            self.safetyFeatures.PostDiveStatistics(self.depthSum,self.depthReadings,elapsedTime,self.lowestDepth)
+            return
+
+        #update depth
+        if (self.lowestDepth > depth):
+            self.lowestDepth = depth
+        self.sumDepth = depth+self.sumDepth
+        self.numberDepthReadings = self.numberDepthReadings + 1
+        if (depth > self.diveHasBegunLimitMeters and self.safetyStopBoolean == False):
+            self.safetyStopBoolean = True
+        if (depth < self.safetyStopBeginDepth):
+            self.initiateSafetyStop = True
+
+        if (self.safetyStopBoolean and self.initiateSafetyStop):
+            result = self.safetyFeatures.SafetyStop(self.draw,depth)
+            if (result == -1): # we are no longer in the safety stop
+                self.safetyStopBoolean = False
+                self.initiateSafetyStop = False
+            elif (result == 1): # we have completed the safety stop!
+                self.showDiveStatistics = True
+            return 
         self.heading = (heading-self.calibrationAdjustment)%360
         curTime = time.time()
         if (abs(depth-self.depth)/(curTime - self.lastTimeScreenUpdated) > 0.1524 ): # Check speed of ascent
@@ -181,30 +216,6 @@ def SystemStatus(bno):
     print('Gyroscope ID:       0x{0:02X}\n'.format(gyro))
     print('Reading BNO055 data, press Ctrl-C to quit...')
 
-def KickCounterThread(KickCountingObject,bno):
-    DURATION = 111
-    #touchCounter= 0
-    #firstTouch = 0
-    while 1:
-        accx,accy,accz = bno.read_accelerometer()
-        accmag = KickCountingObject.magnitude(accx,accy,accz)
-        magWithoutGrav = accmag - 9.8
-        KickCountingObject.newState(magWithoutGrav)
-        """
-        if (magWithoutGrav > 7):
-            if (touchCounter == 0):
-                firstTouch = time.time()
-                touchCounter = 1
-            elif (time.time()-firstTouch <= DURATION):
-                touchCounter = touchCounter + 1
-            else:
-                touchCounter = 0
-        if (touchCounter > 1):
-                myHud.sendAlert("TOUCH")
-        """
-        #print("kicks: " + str(KickCountingObject.getKicks()))        
-        #time.sleep(0.02)
-
 class AlertCaller():
     def __init__(self):
         self.alertTime = 0
@@ -243,11 +254,6 @@ if __name__ == '__main__':
     if not bno.begin(mode=BNO055.OPERATION_MODE_COMPASS):
         raise RuntimeError('Failed to initialize BNO055! Is the sensor connected?')
     #myHud.calibrateIMU(bno)
-
-    #KickCountingObject = FSM()
-    #kickCountingThread = Thread(target=KickCounterThread,args=(KickCountingObject,bno,))
-    #kickCountingThread.daemon = True
-    #kickCountingThread.start()
     SystemStatus(bno)
     oxygenLevels = 200
     depthLevel = 0
@@ -258,11 +264,8 @@ if __name__ == '__main__':
         if (pushButtonPressed):
             alertCaller.createAlert("MARKER SET",time.time()+3)
             pushButtonPressed = False
-        #sys, gyro, accel, mag = bno.get_calibration_status()
-        #if (sys > 1):
         heading, roll, pitch = bno.read_euler()
         heading = round(heading)
-        #kicks = KickCountingObject.getKicks()
         if (i%20==0):
             depthLevel = depthLevel+1
         if(i%45 == 0):
