@@ -1,11 +1,15 @@
 from PIL import Image, ImageDraw, ImageFont
 import time
 import math
-
-#path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/"
-path = "C:/Users/Matthew Burruss/Documents/Github/SeniorDesign/SeniorDesignProject/Server/"
-import matplotlib.pyplot as plt
-import matplotlib.animation as anim
+import csv
+import os
+import datetime as datetime
+import numpy as np
+path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/"
+#path = "C:/Users/Matthew Burruss/Documents/Github/SeniorDesign/SeniorDesignProject/Server/"
+#import matplotlib.pyplot as plt
+#import matplotlib.animation as anim
+#import zmq
 class CompassUnit:
     def __init__(self,kind,text,heading):
         self.kind = kind
@@ -171,7 +175,7 @@ class SafetyFeatures:
         self.font4 = ImageFont.truetype(path+"Nirmala.ttf",8)
         self.font5 = ImageFont.truetype(path+"slkscr.ttf",8)          
         self.safetyTimerStart = 0
-        self.safetyStopTime = 300 #seconds
+        self.safetyStopTime = 30 #seconds ##########################################################################################
     def AscendingorDescendingTooQuickly(self,draw):
         (width,height) = self.font.getsize("SLOW")
         draw.text((64-width/2, 20-height/2), "SLOW", font=self.font, fill=255)
@@ -219,33 +223,111 @@ class SafetyFeatures:
         draw.line(((102,y_denormalized+2),(102,y_denormalized-2)),fill=255)
         return 0
     # Displays: Avg depth, total dive time, lowest depth, temperature
-    def PostDiveStatistics(self,depthSum,depthReadings,totalTimeElapsed,lowestDepth):
+    # need to add temperature
+    def PostDiveStatistics(self,draw,avgDepthData,lowDepthData,diveTimeData,tempData="30",title="DIVE STATS",diveNumber=""):
+        #Print Dive Number if it exists
+        if (diveNumber != ""):
+            numberStr = "#" + str(diveNumber)
+            (width,height) = self.font2.getsize(numberStr)
+            draw.text((2, 0), numberStr, font=self.font2, fill=255)
+            draw.line(((0,15),(128,15)),fill=255)
         # Print Title
-        (width,height) = self.font2.getsize("DIVE STATS")
-        draw.text((64-width/2, 0), "DIVE STATS", font=self.font2, fill=255)
+        (width,height) = self.font2.getsize(title)
+        draw.text((64-width/2, 0), title, font=self.font2, fill=255)
         draw.line(((0,15),(128,15)),fill=255)
         # Print average Depth
         avgDepthTitle = "Avg Depth (m): "
-        avgDepthData = str(round(float(depthSum)/float(depthReadings),1))
+        #avgDepthData = str(round(float(depthSum)/float(depthReadings),1))
         draw.text((2, 20), avgDepthTitle, font=self.font5, fill=255)
         draw.text((90, 20), avgDepthData, font=self.font5, fill=255)
         # Print lowest Depth
         lowDepthTitle = "Max (m):"
-        lowDepthData = str(round(lowestDepth,1))
+        #lowDepthData = str(round(lowestDepth,1))
         draw.text((2, 30), lowDepthTitle, font=self.font5, fill=255)
         draw.text((90, 30), lowDepthData, font=self.font5, fill=255)
         # Print temperature
         tempTitle = "Temp (C):"
-        tempData = "30"
+        #tempData = "30"
         draw.text((2, 40), tempTitle, font=self.font5, fill=255)
         draw.text((90, 40), tempData, font=self.font5, fill=255)        
         # Print total dive time
         diveTimeTitle = "Dive Time:"
-        diveTimeData = str(int(totalTimeElapsed/60)) + ":" + str(int(totalTimeElapsed%60))
+        #diveTimeData = str(int(totalTimeElapsed/60)) + ":" + str(int(totalTimeElapsed%60))
         draw.text((2, 50), diveTimeTitle, font=self.font5, fill=255)
         draw.text((90, 50), diveTimeData, font=self.font5, fill=255)
         return
+    # inputs are strings
+    def saveDiveStatistics(self,avgDepth,lowestDepth,temp,diveTime):
+        # store data
+        data = []
+        date = datetime.datetime.today().strftime('%m/%d/%y')
+        data.append(date)
+        data.append(avgDepth)
+        data.append(lowestDepth)
+        data.append(temp)
+        data.append(diveTime)
+        #path = "C:/Users/Matthew Burruss/Documents/Github/SeniorDesign/SeniorDesignProject/Server/Dives"
+        path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/Dives"
+        newTrialCreated = False
+        trialNumber = 1
+        while not newTrialCreated:
+            filepath = path + "/Dive{0}.csv".format(trialNumber)
+            if not os.path.isfile(filepath): 
+                newTrialCreated = True
+            else:
+                trialNumber = trialNumber + 1
+        csvfile = open(filepath, "w")
+        writer=csv.writer(csvfile)
+        writer.writerow(data)
+        csvfile.close()
+    # returns the dive data
+    # ["date","avgerage depth","lowestdepth","temperature","divetime"]
+    def readPreviouslyStoredDive(self,indexToRead):
+        if (indexToRead <1):
+            indexToRead = 1 
+        #path = "C:/Users/Matthew Burruss/Documents/Github/SeniorDesign/SeniorDesignProject/Server/Dives"
+        path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/Dives"
+        trialFound = False
+        trialNumber = indexToRead
+        while not trialFound:
+            filepath = path + "/Dive{0}.csv".format(trialNumber)
+            if os.path.isfile(filepath): 
+                trialFound = True
+            else:
+                trialNumber = trialNumber -1
+            if (trialNumber == 0):
+                return -1,0
+        with open(filepath, 'rt') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if (len(row)!=0):
+                    data = row
+        return data,trialNumber
+    # displays a dive based on index
+    def displayPreviousDiveData(self,draw,indexToRead):
+        data,indexFound = self.readPreviouslyStoredDive(indexToRead) # Data = ["date","avgerage depth","lowestdepth","temperature","divetime"]
+        # first dive collected
+        if (data == -1):
+            self.displayNoDiveData(draw)
+        else:
+            self.PostDiveStatistics(draw,avgDepthData=data[1],lowDepthData=data[2],diveTimeData=data[4],tempData=data[3],title=data[0],diveNumber=indexFound)
+        return indexFound
 
+    def displayNoDiveData(self,draw):
+        title = "NO DATA"
+        (width,height) = self.font2.getsize(title)
+        draw.text((64-width/2, 0), title, font=self.font2, fill=255)
+        draw.line(((0,15),(128,15)),fill=255)
+        text = "Device will begin"
+        (width,height) = self.font2.getsize(text)
+        draw.text((64-width/2, 20), text, font=self.font5, fill=255)
+        text = "automatically"
+        (width,height) = self.font2.getsize(text)
+        draw.text((64-width/2, 30), text, font=self.font5, fill=255)
+        text = "upon descent"
+        (width,height) = self.font2.getsize(text)
+        draw.text((64-width/2, 40), text, font=self.font5, fill=255)
+"""
 # get an image
 image = Image.new('1', (128, 64))
 # get a font
@@ -271,28 +353,42 @@ depth = 3
 oxygen = 200
 kicks = 0
 minutes = 0
-
+index = 5
+# socket stuff
+IP = "10.66.204.238"
+Port = "5001"
+context = zmq.Context()
+sock = context.socket(zmq.REQ)
+sock.connect("tcp://%s:%s" %(IP,Port))
 for i in range(1000):
     draw.rectangle((0,0,128,64), outline=0, fill=0)
-    print(i)
     #if (i == 0):
      #   safetyFeatures.AscendingorDescendingTooQuickly(draw)
         #img.set_data(image)
      #   plt.pause(2)
     if (i>10):
         depth = depth+0.2
+    if (i% 10 == 0 and i != 0 and i < 31):
+        index = index - 1
     if (i > 30):
         depth = depth - 0.4
+        if (i % 10 == 0):
+            index = index + 1
     if (i > 40):
         depth = 5
     #safetyFeatures.SafetyStop(draw,depth)
-    safetyFeatures.PostDiveStatistics(577,20,73,33)
+    #safetyFeatures.PostDiveStatistics(title="DIVE STATS",avgDepthData="33.3",lowDepthData="40",tempData="30",diveTimeData="0:48")
+    index = safetyFeatures.displayPreviousDiveData(draw,index)
     #img.set_data(image)
     plt.pause(0.03)
     img = plt.imshow(image)
     img.set_data(image)
+    frame = np.asarray(image)
+    data = cv2.imencode('.jpg', frame)[1].tostring()
+    sock.send(data.encode())
+    message = sock.recv()
+    print(message.decode())
     plt.draw()
-"""
 goBackward = False
 alerting = False
 count = 0

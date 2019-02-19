@@ -3,16 +3,13 @@
 # @description A python script to control a 128x64 OLED Screen
 
 # Developer Notes
-# Change when the dive time starts
-# Get the selection working between dives before the dive begins
-# Get the dive to begin
-# Add temperature as a reading
-# allow the two to go back and forth
-import time
+# add ability to delete dives by holding button
+# add ability to begin counting kicks with a button push
+# add total kicks to end of dive statistics
 import RPi.GPIO as GPIO
 import Adafruit_GPIO.SPI as SPI
 import Adafruit_SSD1306
-
+import time
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
@@ -33,9 +30,11 @@ import threading
 import csv
 import datetime
 from datetime import datetime
+import numpy as np
+#import cv2
 #import serial
 #ser = serial.Serial('/dev/ttyACM0', 9600)
-
+import zmq
 class HUD:
     def __init__(self):
         self.RST = None
@@ -82,11 +81,24 @@ class HUD:
         self.lowestDepth = 0
         self.depthSum = 0
         self.depthReadings = 0
-        self.showDiveStatistics = False
+        self.diveComplete = False
+        self.totalDiveTime = 0
         #self.displayLogo()
         #for i in range(10):
         #    print("Drawing loading Screen")
         #    self.displayLoadingScreen()
+        # for demonstration
+        port = "5001"
+        context = zmq.Context()
+        self.sock = context.socket(zmq.REP)
+        self.sock.bind("tcp://*:%s" % port)
+        print("starting on port %s" %port)
+    # resets all booleans
+    def reset(self):
+        self.shouldDisplayAlert = False
+        self.safetyStopBoolean = False # set to True when we have gone below diveHusBegunLimit
+        self.initiateSafetyStop = False # When diver begins to surface, this will be set true.
+        self.diveComplete = False
 
     def calibrateIMU(self,bno):
         sys = 0
@@ -111,6 +123,11 @@ class HUD:
             else:
                 self.shouldDisplayAlert = False
         self.disp.image(self.image)
+        # send image
+        frame = np.asarray(self.image)
+        data = frame.tostring()
+        message = self.sock.recv()
+        self.sock.send(data)
         self.disp.display()
         time.sleep(0.03)
 
@@ -137,34 +154,63 @@ class HUD:
     def NotifyDiverOfAscentSpeed(self):
         self.blankScreen()
         self.safetyFeatures.AscendingorDescendingTooQuickly(self.draw)
+        tmp = self.shouldDisplayAlert
+        self.shouldDisplayAlert = False
         self.loadScreen()
+        self.shouldDisplayAlert = tmp
         time.sleep(1)
+        self.blankScreen()
 
-    def updateScreen(self,heading,kicks,oxygen,depth):
-        # Have we completed a dive show the dive statistics for the current dive
-        if (self.showDiveStatistics):
-            elapsedTime = self.timeMonitor.getTime()
-            self.safetyFeatures.PostDiveStatistics(self.depthSum,self.depthReadings,elapsedTime,self.lowestDepth)
-            return
+    def displayPreviousDives(self,index):
+        self.blankScreen()
+        index = self.safetyFeatures.displayPreviousDiveData(self.draw,index)
+        self.loadScreen()
+        time.sleep(0.3)
+        return index
 
-        #update depth
-        if (self.lowestDepth > depth):
+    def isDiveComplete(self):
+        return self.diveComplete
+    
+    def saveDive(self):
+        avgDepthData = str(round(float(self.depthSum)/float(self.depthReadings),1))
+        lowDepthData = str(round(self.lowestDepth,1))
+        temp = "30"
+        elapsedTime = self.timeMonitor.getTime()
+        diveTimeData = str(int(elapsedTime/60)) + ":" + str(int(elapsedTime%60))
+        self.totalDiveTime = diveTimeData
+        self.safetyFeatures.saveDiveStatistics(avgDepthData,lowDepthData,temp,diveTimeData)
+
+    def showPostDiveStatistics(self):
+        self.blankScreen()
+        avgDepthData = str(round(float(self.depthSum)/float(self.depthReadings),1))
+        lowDepthData = str(round(self.lowestDepth,1))
+        self.safetyFeatures.PostDiveStatistics(self.draw,avgDepthData,lowDepthData,self.totalDiveTime,tempData="30",title="DIVE STATS",diveNumber="")
+        self.loadScreen()
+        time.sleep(0.3)
+
+    def updateScreen(self,heading,kicks,depth):
+        #update depth, depthSum, depthReadings, and lowestDepth
+        if (self.lowestDepth < depth):
             self.lowestDepth = depth
-        self.sumDepth = depth+self.sumDepth
-        self.numberDepthReadings = self.numberDepthReadings + 1
+        self.depthSum = depth+self.depthSum
+        self.depthReadings = self.depthReadings + 1
+        #Check if we are in the safety stop
         if (depth > self.diveHasBegunLimitMeters and self.safetyStopBoolean == False):
             self.safetyStopBoolean = True
         if (depth < self.safetyStopBeginDepth):
             self.initiateSafetyStop = True
-
+        # check if we have exited the safety stop
         if (self.safetyStopBoolean and self.initiateSafetyStop):
             result = self.safetyFeatures.SafetyStop(self.draw,depth)
+            self.loadScreen()
+            self.blankScreen()
             if (result == -1): # we are no longer in the safety stop
                 self.safetyStopBoolean = False
                 self.initiateSafetyStop = False
-            elif (result == 1): # we have completed the safety stop!
-                self.showDiveStatistics = True
+            elif (result == 1): # we have completed the safety stop! Causes to exit loop in main
+                self.diveComplete = True
             return 
+        #  if not in safety stop and dive not complte, update the screen
         self.heading = (heading-self.calibrationAdjustment)%360
         curTime = time.time()
         if (abs(depth-self.depth)/(curTime - self.lastTimeScreenUpdated) > 0.1524 ): # Check speed of ascent
@@ -176,7 +222,7 @@ class HUD:
         self.depth = depth
         self.compass.drawCompass(self.heading,self.draw)
         self.depthMonitor.drawDepth(depth,24,self.draw)
-        self.oxygenMonitor.drawOxygen(oxygen,34,self.draw)
+        #self.oxygenMonitor.drawOxygen(oxygen,34,self.draw)
         self.kickMonitor.drawKickCounter(kicks,24,self.draw)
         self.timeMonitor.drawDiveTime(self.draw)
         self.loadScreen()
@@ -237,40 +283,109 @@ class AlertCaller():
         self.alertMessage = ""
         self.shouldDisplay = False
 
-def touchDetector(channel):
-    global pushButtonPressed
-    GPIO.remove_event_detect(16)
-    pushButtonPressed = True
-    GPIO.add_event_detect(16, edge=GPIO.FALLING , callback=touchDetector,bouncetime = 20)
+def findMaxDiveDataIndex():
+    trialNumber = 1
+    #path = "C:/Users/Matthew Burruss/Documents/Github/SeniorDesign/SeniorDesignProject/Server/Dives"
+    path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/Dives"
+    highestIndexFound = False
+    while not highestIndexFound:
+        filepath = path + "/Dive{0}.csv".format(trialNumber)
+        if os.path.isfile(filepath): 
+            trialNumber = trialNumber + 1
+        else:
+            highestIndexFound = True
+    return trialNumber-1
 
-pushButtonPressed = False
+def touchDetectorRight(channel):
+    global pushButtonPressedRight
+    pushButtonPressedRight = True
+    time.sleep(0.03)
+
+def touchDetectorLeft(channel):
+    global pushButtonPressedLeft
+    pushButtonPressedLeft = True
+    time.sleep(0.03)
+
+pushButtonPressedRight = False
+pushButtonPressedLeft = False
 if __name__ == '__main__':
     myHud = HUD()
     alertCaller = AlertCaller()
     bno = BNO055.BNO055(rst=18)
     GPIO.setmode(GPIO.BCM)
+    GPIO.setup(6, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.add_event_detect(6, edge=GPIO.FALLING , callback=touchDetectorRight,bouncetime = 20)
     GPIO.setup(16, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.add_event_detect(16, edge=GPIO.FALLING , callback=touchDetector,bouncetime = 20)
+    GPIO.add_event_detect(16, edge=GPIO.FALLING , callback=touchDetectorLeft,bouncetime = 20)
     if not bno.begin(mode=BNO055.OPERATION_MODE_COMPASS):
         raise RuntimeError('Failed to initialize BNO055! Is the sensor connected?')
-    #myHud.calibrateIMU(bno)
+    myHud.calibrateIMU(bno)
     SystemStatus(bno)
-    oxygenLevels = 200
-    depthLevel = 0
-    heading = 0
-    i = 0
+    # allow the user to enter a start stage
+    # they can view previous dives until depth exceeds 2. 
+    depth = 1
+    #############################################################################
+    firstPhase = 15 #seconds
+    secondPhase = 20 #seconds
+    delay = time.time()+firstPhase 
+    ##############################################################################
     while(True):
-        i = i + 1
-        if (pushButtonPressed):
-            alertCaller.createAlert("MARKER SET",time.time()+3)
-            pushButtonPressed = False
-        heading, roll, pitch = bno.read_euler()
-        heading = round(heading)
-        if (i%20==0):
-            depthLevel = depthLevel+1
-        if(i%45 == 0):
-            oxygenLevels = oxygenLevels - 25
-        if (alertCaller.hasAlert()):
-                myHud.sendAlert(alertCaller.getMessage(),alertCaller.getTime())
-                alertCaller.reset()
-        myHud.updateScreen(heading,0,oxygenLevels,depthLevel)
+        index = findMaxDiveDataIndex()
+        while(depth<2):
+            if (pushButtonPressedRight):
+                index = index + 1
+                print("Right pressed")
+                pushButtonPressedRight = False
+            if (pushButtonPressedLeft):
+                index = index - 1
+                print("Left pressed")
+                pushButtonPressedLeft = False
+            index = myHud.displayPreviousDives(index)
+            #######################################3
+            if (time.time()>delay):
+                depth = 3
+            ########################################
+        oxygenLevels = 200
+        heading = 0
+        i = 0
+        # begin updating screen during dive. Poll a boolean if dive complete
+        delay = time.time()+secondPhase ##############################################################
+        happen = True
+        depth = 10
+        while(not myHud.isDiveComplete()):
+            i = i + 1
+            if (pushButtonPressedRight or pushButtonPressedLeft):
+                alertCaller.createAlert("MARKER SET",time.time()+3)
+                pushButtonPressedRight = False
+                pushButtonPressedLeft = False
+            heading, roll, pitch = bno.read_euler()
+            heading = round(heading)
+            if (alertCaller.hasAlert()):
+                    myHud.sendAlert(alertCaller.getMessage(),alertCaller.getTime())
+                    alertCaller.reset()
+            myHud.updateScreen(heading,0,depth)
+            ###########################################################################
+            if (time.time()>delay and happen):
+                depth = 2 
+                happen = False
+            elif(not happen):
+                if (depth < 2):
+                    depth = depth + 2
+                else:
+                    depth = depth + 0.5
+                if (depth > 7):
+                    depth = depth - 1.25
+            ###########################################################################
+        myHud.reset() # resets booleans
+        myHud.saveDive() # saves dive into memory
+        # display post statistics until a button is pressed
+        while(not pushButtonPressedLeft and not pushButtonPressedRight):
+            myHud.showPostDiveStatistics()
+        pushButtonPressedLeft = False
+        pushButtonPressedRight = False
+        ############################################################################
+        depth = 1
+        firstPhase = 15 #seconds
+        secondPhase = 20 #seconds
+        delay = time.time()+firstPhase 
+        ##############################################################################
