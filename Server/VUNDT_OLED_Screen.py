@@ -13,7 +13,7 @@ import time
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
-
+import serial
 import math
 import subprocess
 from VUNDT_OLED_Classes import Compass,DepthGuage,OxygenGauge,KickCounter,DiveTime,HomeScreen,Alert,SafetyFeatures
@@ -83,6 +83,7 @@ class HUD:
         self.depthReadings = 0
         self.diveComplete = False
         self.totalDiveTime = 0
+        self.kicks = 0
         #self.displayLogo()
         #for i in range(10):
         #    print("Drawing loading Screen")
@@ -99,6 +100,7 @@ class HUD:
         self.safetyStopBoolean = False # set to True when we have gone below diveHusBegunLimit
         self.initiateSafetyStop = False # When diver begins to surface, this will be set true.
         self.diveComplete = False
+        self.kicks = 0
 
     def calibrateIMU(self,bno):
         sys = 0
@@ -170,7 +172,8 @@ class HUD:
 
     def isDiveComplete(self):
         return self.diveComplete
-    
+    def incrementKicks(self,i):
+        self.kicks = i
     def saveDive(self):
         avgDepthData = str(round(float(self.depthSum)/float(self.depthReadings),1))
         lowDepthData = str(round(self.lowestDepth,1))
@@ -188,7 +191,7 @@ class HUD:
         self.loadScreen()
         time.sleep(0.3)
 
-    def updateScreen(self,heading,kicks,depth):
+    def updateScreen(self,heading,depth):
         #update depth, depthSum, depthReadings, and lowestDepth
         if (self.lowestDepth < depth):
             self.lowestDepth = depth
@@ -223,7 +226,7 @@ class HUD:
         self.compass.drawCompass(self.heading,self.draw)
         self.depthMonitor.drawDepth(depth,24,self.draw)
         #self.oxygenMonitor.drawOxygen(oxygen,34,self.draw)
-        self.kickMonitor.drawKickCounter(kicks,24,self.draw)
+        self.kickMonitor.drawKickCounter(self.kicks,24,self.draw)
         self.timeMonitor.drawDiveTime(self.draw)
         self.loadScreen()
         self.blankScreen()
@@ -306,6 +309,13 @@ def touchDetectorLeft(channel):
     pushButtonPressedLeft = True
     time.sleep(0.03)
 
+kicks = 0
+def KickCounterCommunication():
+    global kicks
+    ser = serial.Serial('/dev/ttyUSB0', 9600)
+    while 1:
+        ser.write('1')
+        kicks = ser.readline()
 pushButtonPressedRight = False
 pushButtonPressedLeft = False
 if __name__ == '__main__':
@@ -317,19 +327,24 @@ if __name__ == '__main__':
     GPIO.add_event_detect(6, edge=GPIO.FALLING , callback=touchDetectorRight,bouncetime = 20)
     GPIO.setup(16, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.add_event_detect(16, edge=GPIO.FALLING , callback=touchDetectorLeft,bouncetime = 20)
+    kickThread = Thread(target = KickCounterCommunication)
+    kickThread.daemon = True
+    kickThread.start()
     if not bno.begin(mode=BNO055.OPERATION_MODE_COMPASS):
         raise RuntimeError('Failed to initialize BNO055! Is the sensor connected?')
-    myHud.calibrateIMU(bno)
+    #myHud.calibrateIMU(bno)
     SystemStatus(bno)
     # allow the user to enter a start stage
     # they can view previous dives until depth exceeds 2. 
     depth = 1
     #############################################################################
     firstPhase = 15 #seconds
-    secondPhase = 20 #seconds
+    secondPhase = 45 #seconds
     delay = time.time()+firstPhase 
     ##############################################################################
+    
     while(True):
+        
         index = findMaxDiveDataIndex()
         while(depth<2):
             if (pushButtonPressedRight):
@@ -345,6 +360,7 @@ if __name__ == '__main__':
             if (time.time()>delay):
                 depth = 3
             ########################################
+        
         oxygenLevels = 200
         heading = 0
         i = 0
@@ -353,6 +369,7 @@ if __name__ == '__main__':
         happen = True
         depth = 10
         while(not myHud.isDiveComplete()):
+            myHud.incrementKicks(int(kicks))
             i = i + 1
             if (pushButtonPressedRight or pushButtonPressedLeft):
                 alertCaller.createAlert("MARKER SET",time.time()+3)
@@ -363,7 +380,7 @@ if __name__ == '__main__':
             if (alertCaller.hasAlert()):
                     myHud.sendAlert(alertCaller.getMessage(),alertCaller.getTime())
                     alertCaller.reset()
-            myHud.updateScreen(heading,0,depth)
+            myHud.updateScreen(heading,depth)
             ###########################################################################
             if (time.time()>delay and happen):
                 depth = 2 
@@ -386,6 +403,6 @@ if __name__ == '__main__':
         ############################################################################
         depth = 1
         firstPhase = 15 #seconds
-        secondPhase = 20 #seconds
+        secondPhase = 45 #seconds
         delay = time.time()+firstPhase 
         ##############################################################################
