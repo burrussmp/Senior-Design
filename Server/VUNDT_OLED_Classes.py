@@ -87,21 +87,24 @@ class Compass:
         draw.line(((0,Y+height/2),(center-width/2-2,Y+height/2)),fill=255)
         draw.line(((center+width/2+2,Y+height/2),(128,Y+height/2)),fill=255)
 
-class DepthGuage:
+class DepthAndTempGuage:
     def __init__(self,kind):
         self.font = ImageFont.truetype(path+"slkscr.ttf",8)
         self.text = ""
         self.kind = kind # either metric or empirical
     # depth collected in meters
-    def drawDepth(self,depth,y,draw):
+    def drawDepthAndTemp(self,depth,temp,y,draw):
         if (self.kind == "empirical"):
-            depthInFeetRounded = round(depth*3.28084,1)
+            depthInFeetRounded = round(depth*3.28084,2)
             depthText = str(depthInFeetRounded) + "ft"
         elif (self.kind == "metric"):
-            depthInMetersRounded = round(depth,1)
+            depthInMetersRounded = round(depth,2)
             depthText = self.text+str(depthInMetersRounded) + "m"
         (width,height) = self.font.getsize(depthText)
         draw.text((128-width-2, y), depthText, font=self.font, fill=255)
+        tempText = self.text + str(round(temp,2)) + "C"
+        (width,height) = self.font.getsize(tempText)
+        draw.text((128-width-2, y+10), tempText, font=self.font, fill=255)
     def changeToMetric(self):
         self.kind = "metric"
     def changeToEmpirical(self):
@@ -119,11 +122,14 @@ class OxygenGauge:
 class KickCounter:
     def __init__(self):
         self.font = ImageFont.truetype(path+"slkscr.ttf",8)
-        self.text = "Kicks: "
-    def drawKickCounter(self,kicks,y,draw):
-        kickText = self.text + str(kicks)
-        draw.text((2, y), kickText, font=self.font, fill=255)
-
+        self.text = "Total Kicks: "
+    def drawKickCounter(self,totalKicks,kicks,markerSet,y,draw):
+        if (markerSet):
+            kickText = "Kicks: " + str(kicks)
+            draw.text((2, y), kickText, font=self.font, fill=255)
+        else:
+            kickText = self.text + str(totalKicks)
+            draw.text((2, y), kickText, font=self.font, fill=255)
 class DiveTime:
     def __init__(self):
         self.font = ImageFont.truetype(path+"slkscr.ttf",8)
@@ -175,7 +181,7 @@ class SafetyFeatures:
         self.font4 = ImageFont.truetype(path+"Nirmala.ttf",8)
         self.font5 = ImageFont.truetype(path+"slkscr.ttf",8)          
         self.safetyTimerStart = 0
-        self.safetyStopTime = 30 #seconds ##########################################################################################
+        self.safetyStopTime = 5*60 #seconds ##########################################################################################
     def AscendingorDescendingTooQuickly(self,draw):
         (width,height) = self.font.getsize("SLOW")
         draw.text((64-width/2, 20-height/2), "SLOW", font=self.font, fill=255)
@@ -224,7 +230,7 @@ class SafetyFeatures:
         return 0
     # Displays: Avg depth, total dive time, lowest depth, temperature
     # need to add temperature
-    def PostDiveStatistics(self,draw,avgDepthData,lowDepthData,diveTimeData,tempData="30",title="DIVE STATS",diveNumber=""):
+    def PostDiveStatistics(self,draw,avgDepthData,lowDepthData,diveTimeData,totalKicks,tempData="30",title="DIVE STATS",diveNumber=""):
         #Print Dive Number if it exists
         if (diveNumber != ""):
             numberStr = "#" + str(diveNumber)
@@ -238,27 +244,32 @@ class SafetyFeatures:
         # Print average Depth
         avgDepthTitle = "Avg Depth (m): "
         #avgDepthData = str(round(float(depthSum)/float(depthReadings),1))
-        draw.text((2, 20), avgDepthTitle, font=self.font5, fill=255)
-        draw.text((90, 20), avgDepthData, font=self.font5, fill=255)
+        draw.text((2, 16), avgDepthTitle, font=self.font5, fill=255)
+        draw.text((90, 16), avgDepthData, font=self.font5, fill=255)
         # Print lowest Depth
         lowDepthTitle = "Max (m):"
         #lowDepthData = str(round(lowestDepth,1))
-        draw.text((2, 30), lowDepthTitle, font=self.font5, fill=255)
-        draw.text((90, 30), lowDepthData, font=self.font5, fill=255)
+        draw.text((2, 25), lowDepthTitle, font=self.font5, fill=255)
+        draw.text((90, 25), lowDepthData, font=self.font5, fill=255)
         # Print temperature
         tempTitle = "Temp (C):"
         #tempData = "30"
-        draw.text((2, 40), tempTitle, font=self.font5, fill=255)
-        draw.text((90, 40), tempData, font=self.font5, fill=255)        
+        draw.text((2, 34), tempTitle, font=self.font5, fill=255)
+        draw.text((90, 34), tempData, font=self.font5, fill=255)        
         # Print total dive time
         diveTimeTitle = "Dive Time:"
         #diveTimeData = str(int(totalTimeElapsed/60)) + ":" + str(int(totalTimeElapsed%60))
-        draw.text((2, 50), diveTimeTitle, font=self.font5, fill=255)
-        draw.text((90, 50), diveTimeData, font=self.font5, fill=255)
+        draw.text((2, 43), diveTimeTitle, font=self.font5, fill=255)
+        draw.text((90, 43), diveTimeData, font=self.font5, fill=255)
+        # Print total kicks
+        totalKickTitle = "Total Kicks:"
+        #diveTimeData = str(int(totalTimeElapsed/60)) + ":" + str(int(totalTimeElapsed%60))
+        draw.text((2, 52), totalKickTitle, font=self.font5, fill=255)
+        draw.text((90, 52), str(totalKicks), font=self.font5, fill=255)
         return
     # inputs are strings
-    def saveDiveStatistics(self,avgDepth,lowestDepth,temp,diveTime):
-        # store data
+    def saveDiveStatistics(self,avgDepth,lowestDepth,temp,diveTime,totalKicks):
+        # store datao
         data = []
         date = datetime.datetime.today().strftime('%m/%d/%y')
         data.append(date)
@@ -266,6 +277,7 @@ class SafetyFeatures:
         data.append(lowestDepth)
         data.append(temp)
         data.append(diveTime)
+        data.append(totalKicks)
         #path = "C:/Users/Matthew Burruss/Documents/Github/SeniorDesign/SeniorDesignProject/Server/Dives"
         path = "/home/pi/Desktop/SeniorDesign/SeniorDesign/Server/Dives"
         newTrialCreated = False
@@ -310,7 +322,7 @@ class SafetyFeatures:
         if (data == -1):
             self.displayNoDiveData(draw)
         else:
-            self.PostDiveStatistics(draw,avgDepthData=data[1],lowDepthData=data[2],diveTimeData=data[4],tempData=data[3],title=data[0],diveNumber=indexFound)
+            self.PostDiveStatistics(draw,avgDepthData=data[1],lowDepthData=data[2],diveTimeData=data[4],tempData=data[3],totalKicks = data[5],title=data[0],diveNumber=indexFound)
         return indexFound
 
     def displayNoDiveData(self,draw):
@@ -341,7 +353,7 @@ x = 0
 img = None
     
 compass = Compass()
-depthMonitor = DepthGuage("metric")
+depthMonitor = DepthAndTempGuage("metric")
 oxygenMonitor = OxygenGauge()
 kickMonitor = KickCounter()
 timeMonitor = DiveTime()
