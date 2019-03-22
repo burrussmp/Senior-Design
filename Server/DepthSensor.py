@@ -73,7 +73,8 @@ class Sensor(object):
         temp = TEMP / 100.0
         if units in ['fahrenheit', 'Fahrenheit', 'F', 'f']:
             temp = (temp * 9/5) + 32
-        return pressure, temp
+        depth = (pressure-101.325)*0.101972
+        return depth, temp
 
     def _read_calibration_coeffs(self):
         # Read 12 bytes of calibration data
