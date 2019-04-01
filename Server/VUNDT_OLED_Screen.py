@@ -1,13 +1,6 @@
 # @author Matthew Burruss
 # @date 12/21/2018
 # @description A python script to control a 128x64 OLED Screen
-
-# Developer Notes
-# add ability to delete dives by holding button
-# add ability to begin counting kicks with a button push
-# add total kicks to end of dive statistics
-# be able to reset kicks
-# depth gauge
 from DepthSensor import Sensor
 import RPi.GPIO as GPIO
 import Adafruit_GPIO.SPI as SPI
@@ -244,10 +237,6 @@ class HUD:
         self.alertTime = curTime
         self.alertMessage = message
         self.shouldDisplayAlert = True
-        if (self.alertMessage == "MARKER SET"):
-            self.setCompassMarker()
-        if (self.alertMessage == "MARKER REMOVED"):
-            self.clearCompassMarker()
 
 def SystemStatus(bno):
     # Print system status and self test result.
@@ -375,11 +364,13 @@ if __name__ == '__main__':
                 alertCaller.createAlert("MARKER SET",time.time()+3)
                 pushButtonPressedRight = False
                 myHud.kicks = 0
+                myHud.setCompassMarker()
                 pattern.append(1)  ############################################33333
             if (pushButtonPressedLeft):
                 alertCaller.createAlert("MARKER REMOVED",time.time()+3)
                 pushButtonPressedLeft = False
                 pattern.append(0)  ###################################################3
+                myHud.clearCompassMarker()
             ###################################################3
             if (len(pattern)>=4):
                 print(pattern)
